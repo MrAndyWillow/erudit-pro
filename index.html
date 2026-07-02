@@ -657,7 +657,9 @@ function generateCandidates(board, rack, dict, layout, hardStartLetters, opts = 
     const key = c.dir + '|' + c.startCell.col + ',' + c.startCell.row + '|' + c.word;
     if (!dedup.has(key)) dedup.set(key, c);
   });
-  const finalList = Array.from(dedup.values()).sort((a,b) => b.sortScore - a.sortScore);
+  const finalList = Array.from(dedup.values())
+    .filter(c => candidateStillValid(board, c.mainCells))
+    .sort((a,b) => b.sortScore - a.sortScore);
 
   const standard = finalList.filter(c => c.needsExtraJokers === 0).slice(0, limit);
   const jokerNeeded = extraJokers > 0
@@ -665,6 +667,35 @@ function generateCandidates(board, rack, dict, layout, hardStartLetters, opts = 
     : [];
 
   return { standard, jokerNeeded, timedOut, scannedCount: raw.length };
+}
+
+/* ============================================================================
+   §9б. ЗАЩИТА ОТ УСТАРЕВШИХ ПОДСКАЗОК
+   Независимая повторная проверка кандидата против ТЕКУЩЕЙ доски: все новые
+   клетки должны быть по-прежнему пустыми, все клетки, которые кандидат считал
+   уже занятыми, должны по-прежнему содержать ту же букву, а сам ход обязан
+   реально касаться доски (пересечением или примыканием). Используется и сразу
+   при генерации (защита от ошибок), и в интерфейсе — перед показом призрака,
+   применением или обменом на джокеры (защита от устаревания списка подсказок
+   после того, как доска изменилась от других ходов).
+   ========================================================================= */
+
+function candidateStillValid(board, mainCells) {
+  for (let i = 0; i < mainCells.length; i++) {
+    const c = mainCells[i];
+    const occ = boardGet(board, c.col, c.row);
+    if (c.isNew) { if (occ) return false; }
+    else { if (!occ || occ.letter !== c.letter || occ.isBlank !== c.isBlank) return false; }
+  }
+  const isFirstMove = Object.keys(board).length === 0;
+  if (isFirstMove) return mainCells.some(c => c.col === CENTER.col && c.row === CENTER.row);
+  const hasFixed = mainCells.some(c => !c.isNew);
+  if (hasFixed) return true;
+  return mainCells.some(c => {
+    if (!c.isNew) return false;
+    return [[c.col-1,c.row],[c.col+1,c.row],[c.col,c.row-1],[c.col,c.row+1]].some(([nc,nr]) =>
+      inBounds(nc,nr) && boardGet(board,nc,nr));
+  });
 }
 
 /* ============================================================================
@@ -1088,7 +1119,7 @@ function InsufficientLettersModal({ open, onClose, info, onSwitchToOpponent, onF
   );
 }
 
-function JokerExchangeModal({ open, onClose, candidate, myRack, jokerBurnCost, jokersAvailable, onConfirmBurn, onConfirmBuy }) {
+function JokerExchangeModal({ open, onClose, candidate, myRack, onConfirmBurn, onConfirmBuy }) {
   const [selected, setSelected] = useState([]);
   useEffect(() => { setSelected([]); }, [candidate]);
   if (!candidate) return null;
@@ -1105,7 +1136,7 @@ function JokerExchangeModal({ open, onClose, candidate, myRack, jokerBurnCost, j
   rackArr.forEach((l,i) => { if (!usedForWord.has(i) && l !== '*') spareIdx.push(i); });
 
   const need = candidate.needsExtraJokers;
-  const requiredBurns = need * jokerBurnCost;
+  const requiredBurns = need; // курс обмена в игре фиксирован: 1 фишка → 1 джокер
   const canBurn = selected.length >= requiredBurns;
 
   return (
@@ -1119,7 +1150,7 @@ function JokerExchangeModal({ open, onClose, candidate, myRack, jokerBurnCost, j
         <p className="text-sm text-ink-300">Выберите способ получить недостающие джокеры.</p>
 
         <div className="rounded-xl border border-ink-700 p-3 space-y-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-ink-200"><Icon path={ICONS.flame} size={16} className="text-amber-400"/> Сжечь свободные фишки ({jokerBurnCost} фишка(и) → 1 джокер)</div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-200"><Icon path={ICONS.flame} size={16} className="text-amber-400"/> Сжечь свободные фишки (1 фишка → 1 джокер)</div>
           {spareIdx.length === 0 ? (
             <div className="text-xs text-ink-500">Нет свободных фишек — все нужны для самого слова.</div>
           ) : (
@@ -1151,11 +1182,71 @@ function JokerExchangeModal({ open, onClose, candidate, myRack, jokerBurnCost, j
 }
 
 /* ============================================================================
+   §16б. ОБМЕН ФИШКИ (правило игры: одна буква меняется на случайную из мешка,
+   старая возвращается в мешок). Учёт мешка ничего специального делать не
+   должен — раз рука хранится как обычный текст, замена буквы в ней сама по
+   себе корректно «возвращает» старую букву в неизвестный пул и «изымает»
+   новую — так же, как любое другое ручное изменение руки.
+   ========================================================================= */
+
+function ExchangeLetterModal({ open, onClose, myRack, bagState, onConfirm }) {
+  const [selectedIdx, setSelectedIdx] = useState(null);
+  const [newLetter, setNewLetter] = useState('');
+  useEffect(() => { if (open) { setSelectedIdx(null); setNewLetter(''); } }, [open]);
+  if (!open) return null;
+  const rackArr = parseRack(myRack);
+  const validNew = newLetter === '*' || RUSSIAN_ALPHABET.includes(newLetter);
+  const poolLeft = newLetter === '*' ? bagState.jokersUnknownPool : bagState.perLetterUnknownPool[newLetter];
+
+  return (
+    <Modal open={open} onClose={onClose} title="Обмен фишки">
+      <div className="space-y-4">
+        <p className="text-sm text-ink-300">
+          Выберите фишку в руке, которую меняете в мешке — она вернётся обратно, а вы получите
+          другую случайную фишку взамен.
+        </p>
+        <div>
+          <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Какую фишку меняете</label>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {rackArr.map((l,i) => (
+              <button key={i} type="button" onClick={() => setSelectedIdx(i)}
+                className={`w-10 h-10 rounded-lg font-display font-bold text-base tile-face ${selectedIdx===i ? 'ring-2 ring-red-400' : ''}`}>
+                {l === '*' ? '★' : l}
+              </button>
+            ))}
+          </div>
+        </div>
+        {selectedIdx !== null && (
+          <div>
+            <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Какую фишку вытянули из мешка</label>
+            <input type="text" maxLength={1} value={newLetter}
+              onChange={e => setNewLetter(e.target.value.toUpperCase().replace(/Ё/g,'Е').replace(/[^А-Я*]/g,'').slice(0,1))}
+              placeholder="напр. Р или * (джокер)"
+              className="mt-2 w-20 bg-ink-800 border border-ink-600 rounded-xl px-3 py-2 text-center text-lg font-display tracking-widest focus:border-gold-400" />
+            {newLetter && (
+              <div className={`text-[11px] mt-1.5 ${validNew ? 'text-ink-500' : 'text-red-400'}`}>
+                {validNew ? `В неизвестном пуле сейчас: ${poolLeft}` : 'Введите одну кириллическую букву или * для джокера'}
+              </div>
+            )}
+          </div>
+        )}
+        <Button variant="gold" className="w-full" disabled={selectedIdx === null || !validNew}
+          onClick={() => onConfirm(selectedIdx, newLetter)}>
+          <Icon path={ICONS.swap} size={16}/> Подтвердить обмен
+        </Button>
+        <Button variant="ghost" className="w-full" onClick={onClose}>Отмена</Button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================================================================
    §17. ПАНЕЛЬ ПОДСКАЗОК
    ========================================================================= */
 
 function CandidateCard({ c, onPreview, onApply, onNeedJoker, isJoker }) {
   const tilesTxt = c.mainCells.filter(x=>x.isNew).map(x=>x.letter).join('');
+  const jokerLetters = c.mainCells.filter(x=>x.isNew && x.isBlank).map(x=>x.letter);
   return (
     <div onMouseEnter={() => onPreview(c)} onMouseLeave={() => onPreview(null)} onClick={() => onPreview(c)}
       className="rounded-2xl border border-ink-700 bg-ink-800/50 hover:bg-ink-800 hover:border-gold-500/40 transition-all p-3.5 cursor-pointer animate-rise">
@@ -1163,7 +1254,7 @@ function CandidateCard({ c, onPreview, onApply, onNeedJoker, isJoker }) {
         <div>
           <div className="font-display font-bold text-lg text-ink-50 tracking-wide">{c.word}</div>
           <div className="text-[11px] text-ink-500 mt-0.5">
-            {c.dir === 'H' ? 'по горизонтали' : 'по вертикали'} · старт {COL_LETTERS[c.startCell.col-1]}{c.startCell.row} · новых фишек: {tilesTxt.length} ({tilesTxt})
+            {c.dir === 'H' ? 'по горизонтали' : 'по вертикали'} · старт {COL_LETTERS[c.startCell.col-1]}{c.startCell.row} · {c.word.length} букв в слове · новых фишек: {tilesTxt.length} ({tilesTxt})
           </div>
         </div>
         <div className="text-right shrink-0">
@@ -1177,6 +1268,7 @@ function CandidateCard({ c, onPreview, onApply, onNeedJoker, isJoker }) {
         {c.cornerAdj < 0 && <Badge tone="danger">риск угла</Badge>}
         {c.risk && c.risk.risky && <Badge tone="danger"><Icon path={ICONS.warn} size={11}/> достройка: {c.risk.options.slice(0,2).map(w=>w.toLowerCase()).join(', ')}{c.risk.options.length>2?'…':''}</Badge>}
         {isJoker && <Badge tone="info"><Icon path={ICONS.gem} size={11}/> джокеров нужно: {c.needsExtraJokers}</Badge>}
+        {jokerLetters.length > 0 && <Badge tone="info"><Icon path={ICONS.gem} size={11}/> джокер{jokerLetters.length>1?'ы':''} за: {jokerLetters.join(', ')}</Badge>}
         <Badge>рейтинг {Math.round(c.sortScore)}</Badge>
       </div>
       <div className="flex gap-2 mt-3">
@@ -1206,7 +1298,18 @@ function SuggestionsPanel({ board, layout, dict, hardStartLetters, myRack, onPre
     }, 20);
   }, [board, rackArr, dict, layout, hardStartLetters, wantJokerPass]);
 
-  useEffect(() => { setResult(null); }, [board, myRack, layout]);
+  // Полный сброс — только когда меняется рука или раскладка (это меняет саму
+  // применимость/очки ходов). При изменении доски (сыграли ещё один ход) —
+  // не сбрасываем целиком, а вычищаем только те карточки, что перестали быть
+  // легальными на новой доске (устаревшие подсказки не должны отображаться).
+  useEffect(() => { setResult(null); }, [myRack, layout]);
+  useEffect(() => {
+    setResult(r => {
+      if (!r) return r;
+      const filterFn = c => candidateStillValid(board, c.mainCells);
+      return { ...r, standard: r.standard.filter(filterFn), jokerNeeded: r.jokerNeeded.filter(filterFn) };
+    });
+  }, [board]);
 
   return (
     <Card className="p-4">
@@ -1414,7 +1517,7 @@ function App() {
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const [insufficientInfo, setInsufficientInfo] = useState(null);
   const [jokerModalCandidate, setJokerModalCandidate] = useState(null);
-  const [jokerBurnCost, setJokerBurnCost] = useState(1);
+  const [exchangeOpen, setExchangeOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -1519,6 +1622,15 @@ function App() {
     setJokerModalCandidate(null);
   }, [jokerModalCandidate, myRack, finalizeMove]);
 
+  const handleConfirmExchange = useCallback((idx, newLetter) => {
+    const rackArr = parseRack(myRack);
+    const oldLetter = rackArr[idx];
+    rackArr[idx] = newLetter;
+    setMyRack(rackArr.join(''));
+    setExchangeOpen(false);
+    notify(`Обмен: «${oldLetter === '*' ? '★' : oldLetter}» → «${newLetter === '*' ? '★' : newLetter}»`);
+  }, [myRack, notify]);
+
   const onCellClick = useCallback((c, r) => {
     if (pickingStart) { setStartCell({ col: c, row: r }); setPickingStart(false); }
   }, [pickingStart]);
@@ -1577,13 +1689,23 @@ function App() {
           )}
           <Board board={board} layout={layout} ghostMap={ghostMap} startCell={startCell} onCellClick={onCellClick} />
           <div className="hidden lg:block">
-            <RackEditor value={myRack} onChange={setMyRack} bagState={bagState} />
+            <Card className="p-4 space-y-3">
+              <RackEditor value={myRack} onChange={setMyRack} bagState={bagState} />
+              <Button variant="default" size="sm" className="w-full" onClick={() => setExchangeOpen(true)}>
+                <Icon path={ICONS.swap} size={14}/> Обменять фишку
+              </Button>
+            </Card>
           </div>
         </div>
 
         <div className="space-y-3">
           <div className="lg:hidden">
-            <Card className="p-4"><RackEditor value={myRack} onChange={setMyRack} bagState={bagState} /></Card>
+            <Card className="p-4 space-y-3">
+              <RackEditor value={myRack} onChange={setMyRack} bagState={bagState} />
+              <Button variant="default" size="sm" className="w-full" onClick={() => setExchangeOpen(true)}>
+                <Icon path={ICONS.swap} size={14}/> Обменять фишку
+              </Button>
+            </Card>
           </div>
 
           <div className="flex gap-1.5 bg-ink-900/60 border border-ink-700 rounded-2xl p-1.5 overflow-x-auto scrollbar-none">
@@ -1620,15 +1742,10 @@ function App() {
                   <Button variant={layoutKey==='alt'?'gold':'default'} onClick={() => setLayoutKey('alt')} className="flex-1">Альтернативная</Button>
                 </div>
               </div>
-              <div>
-                <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Стоимость джокера при обмене (фишек за 1 джокер)</label>
-                <input type="number" min="1" max="5" value={jokerBurnCost} onChange={e=>setJokerBurnCost(Math.max(1,parseInt(e.target.value||'1',10)))}
-                  className="mt-2 w-24 bg-ink-800 border border-ink-600 rounded-xl px-3 py-2 text-center" />
-                <p className="text-[11px] text-ink-500 mt-1.5">Точный курс обмена не задокументирован в правилах — при необходимости скорректируйте здесь.</p>
-              </div>
               <div className="text-[11px] text-ink-500 leading-relaxed border-t border-ink-700 pt-3">
                 Полный мешок (по таблице букв): <span className="text-ink-300 font-semibold">{TOTAL_BAG_INITIAL}</span> фишек
                 ({Object.values(BAG_INITIAL).reduce((a,b)=>a+b,0)} букв + {JOKER_COUNT_INITIAL} джокера).
+                Обмен фишки на джокер — 1 к 1.
               </div>
             </Card>
           )}
@@ -1641,8 +1758,11 @@ function App() {
         onForcePlace={() => { finalizeMove(insufficientInfo); setInsufficientOpen(false); }} />
 
       <JokerExchangeModal open={!!jokerModalCandidate} onClose={() => setJokerModalCandidate(null)}
-        candidate={jokerModalCandidate} myRack={myRack} jokerBurnCost={jokerBurnCost}
+        candidate={jokerModalCandidate} myRack={myRack}
         onConfirmBurn={handleConfirmBurn} onConfirmBuy={handleConfirmBuy} />
+
+      <ExchangeLetterModal open={exchangeOpen} onClose={() => setExchangeOpen(false)}
+        myRack={myRack} bagState={bagState} onConfirm={handleConfirmExchange} />
     </div>
   );
 }

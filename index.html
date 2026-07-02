@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Эрудит Помощник Pro</title>
+<meta name="description" content="Тактический помощник для игры «Эрудит»: интерактивная доска, учёт мешка и умные подсказки ходов." />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0908" />
+<meta name="color-scheme" content="dark" />
+
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Эрудит" />
+<link rel="apple-touch-icon" id="apple-touch-icon" />
+<link rel="icon" id="favicon-icon" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@400;500;600;700;800;900&family=Golos+Text:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/3.4.13/tailwind.min.js"></script>
+<script>
+  // Fallback to hosted Tailwind CDN build (JIT) if the pinned asset above is unavailable.
+  if (typeof tailwind === 'undefined') {
+    document.write('<scr' + 'ipt src="https://cdn.tailwindcss.com"></scr' + 'ipt>');
+  }
+</script>
+<script>
+  window.tailwind && (tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['"Unbounded"', 'sans-serif'],
+          body: ['"Golos Text"', 'sans-serif'],
+        },
+        colors: {
+          ink: {
+            950: '#0a0908',
+            900: '#121009',
+            850: '#171310',
+            800: '#1d1812',
+            700: '#28221a',
+            600: '#3a3225',
+            500: '#544a37',
+          },
+          gold: {
+            50: '#fdf8ec',
+            100: '#f9edc9',
+            200: '#f2d98d',
+            300: '#eabf4f',
+            400: '#e0a72a',
+            500: '#c78c1d',
+            600: '#a06d16',
+            700: '#7a5313',
+          },
+          board: {
+            w3: '#c23b3b',
+            w2: '#d98a2b',
+            l3: '#2f7fc1',
+            l2: '#3f9d5d',
+          }
+        },
+        boxShadow: {
+          glow: '0 0 0 1px rgba(224,167,42,0.25), 0 8px 30px -8px rgba(224,167,42,0.35)',
+          card: '0 1px 0 rgba(255,255,255,0.04) inset, 0 10px 30px -12px rgba(0,0,0,0.6)',
+        },
+        keyframes: {
+          rise: { '0%': { opacity: 0, transform: 'translateY(10px)' }, '100%': { opacity: 1, transform: 'translateY(0)' } },
+          pop: { '0%': { transform: 'scale(0.85)', opacity: 0 }, '100%': { transform: 'scale(1)', opacity: 1 } },
+          shimmer: { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+          pulseGlow: { '0%,100%': { boxShadow: '0 0 0 0 rgba(224,167,42,0.35)' }, '50%': { boxShadow: '0 0 0 6px rgba(224,167,42,0)' } },
+        },
+        animation: {
+          rise: 'rise 0.45s cubic-bezier(.16,1,.3,1) both',
+          pop: 'pop 0.25s cubic-bezier(.16,1,.3,1) both',
+          shimmer: 'shimmer 2.4s linear infinite',
+          pulseGlow: 'pulseGlow 2s ease-in-out infinite',
+        },
+      },
+    },
+  });
+</script>
+
+<style>
+  html, body { background: #0a0908; overscroll-behavior: none; }
+  body {
+    font-family: 'Golos Text', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  * { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: rgba(224,167,42,0.35); }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3a3225; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #544a37; }
+
+  .noise-bg {
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(224,167,42,0.07), transparent 40%),
+      radial-gradient(circle at 85% 90%, rgba(47,127,193,0.08), transparent 45%),
+      radial-gradient(circle at 90% 5%, rgba(194,59,59,0.06), transparent 40%);
+  }
+  .noise-bg::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .glass {
+    background: linear-gradient(180deg, rgba(29,24,18,0.85), rgba(18,16,9,0.9));
+    border: 1px solid rgba(224,167,42,0.12);
+    backdrop-filter: blur(14px);
+  }
+
+  .board-cell-shadow { box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 -1px 0 rgba(0,0,0,0.35) inset; }
+
+  .tile-face {
+    background: linear-gradient(160deg, #f6e6bd 0%, #e6c976 55%, #d3ab4a 100%);
+    box-shadow: 0 2px 0 #8a6a1f, 0 4px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6);
+    color: #2a1c04;
+  }
+  .tile-face.opp { background: linear-gradient(160deg, #dfe6ec 0%, #b9c6d1 55%, #92a2b0 100%); box-shadow: 0 2px 0 #5c6a75, 0 4px 8px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.6); color: #1a2229; }
+  .tile-face.ghost { background: linear-gradient(160deg, rgba(224,167,42,0.35), rgba(224,167,42,0.18)); box-shadow: 0 0 0 1.5px rgba(224,167,42,0.7) inset; color: #f2d98d; }
+
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .shimmer-text {
+    background: linear-gradient(90deg, #e0a72a 0%, #f9edc9 25%, #e0a72a 50%, #f9edc9 75%, #e0a72a 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 3.5s linear infinite;
+  }
+
+  input[type="text"]:focus, button:focus-visible, select:focus-visible { outline: 2px solid rgba(224,167,42,0.55); outline-offset: 2px; }
+</style>
+</head>
+<body class="bg-ink-950 text-ink-100 noise-bg min-h-screen">
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js" crossorigin></script>
+
+<script type="text/babel" data-presets="react">
+"use strict";
+const { useState, useEffect, useMemo, useRef, useCallback, useReducer, Fragment } = React;
+
+/* ============================================================================
+   §1. ИГРОВЫЕ ДАННЫЕ (из erudit-description.md)
+   ========================================================================= */
+
+const LETTER_VALUES = {
+  А:1, И:1, Н:1, О:1,
+  В:2, Г:2, Е:2, К:2, Л:2, М:2, П:2, Р:2, С:2, Т:2,
+  Б:3, Д:3, У:3, Я:3,
+  Ж:5, З:5, Й:5, Х:5, Ч:5, Ы:5, Ь:5,
+  Ф:8, Ц:8, Ш:8, Щ:8, Ю:8,
+  Э:10,
+  Ъ:15,
+};
+
+// Официальная раскладка мешка (сумма даёт 127, а не 104 — см. примечание в чате:
+// таблица по буквам в erudit-description.md использована как основной источник истины).
+const BAG_INITIAL = {
+  А:10, Б:3, В:5, Г:3, Д:5, Е:9, Ж:1, З:2, И:9, Й:2, К:6, Л:5, М:4, Н:8, О:10,
+  П:5, Р:6, С:6, Т:6, У:3, Ф:1, Х:1, Ц:1, Ч:2, Ш:1, Щ:1, Ъ:1, Ы:1, Ь:2, Э:1, Ю:1, Я:2,
+};
+const JOKER_COUNT_INITIAL = 4;
+const RUSSIAN_ALPHABET = Object.keys(BAG_INITIAL);
+const TOTAL_BAG_INITIAL = Object.values(BAG_INITIAL).reduce((a,b)=>a+b,0) + JOKER_COUNT_INITIAL;
+
+const RACK_SIZE = 7;
+const BINGO_BONUS = 15;
+const BOARD_SIZE = 15;
+const CENTER = { col: 8, row: 8 };
+
+// Буквы, которыми практически невозможно (или крайне сложно) начать слово —
+// используются как стартовый эвристический набор для угловой стратегии,
+// дополняется динамически на основе загруженного словаря (см. §3).
+const HARD_START_LETTERS_SEED = new Set(['Ь','Ъ','Ы','Й','Ц','Щ','Ф','Ч','Ю','Ж','Ш','З']);
+
+/* ============================================================================
+   §2. РАСКЛАДКИ ДОСОК (из erudit_boards.md, латинские координаты → col,row 1..15)
+   ========================================================================= */
+
+const COL_LETTERS = ['А','Б','В','Г','Д','Е','Ж','З','И','К','Л','М','Н','О','П'];
+const colIndex = (latLetter) => 'ABCDEFGHIJKLMNO'.indexOf(latLetter) + 1;
+
+function parseCoords(latString) {
+  // "A1, H1, O1" -> [{col,row}, ...]
+  return latString.split(',').map(s => s.trim()).filter(Boolean).map(tok => {
+    const m = tok.match(/^([A-O])(\d{1,2})$/);
+    const col = colIndex(m[1]);
+    const row = parseInt(m[2], 10);
+    return { col, row };
+  });
+}
+
+function buildLayout(name, w3, l3, w2, l2) {
+  const grid = {};
+  const mark = (arr, type) => arr.forEach(({col,row}) => { grid[`${col},${row}`] = type; });
+  mark(parseCoords(w3), 'W3');
+  mark(parseCoords(l3), 'L3');
+  mark(parseCoords(w2), 'W2');
+  mark(parseCoords(l2), 'L2');
+  return { name, grid };
+}
+
+const BOARD_LAYOUTS = {
+  classic: buildLayout(
+    'Основная доска',
+    'A1, H1, O1, A8, O8, A15, H15, O15',
+    'B2, N2, C3, M3, D4, L4, E5, K5, E11, K11, D12, L12, C13, M13, B14, N14',
+    'F2, J2, B6, N6, B10, N10, F14, J14',
+    'D1, L1, G3, I3, A4, H4, O4, C7, G7, I7, M7, D8, L8, C9, G9, I9, M9, A12, H12, O12, G13, I13, D15, L15'
+  ),
+  alt: buildLayout(
+    'Альтернативная доска',
+    'D1, L1, A4, O4, A12, O12, D15, L15',
+    'G1, I1, D4, L4, F6, J6, A7, O7, A9, O9, F10, J10, D12, L12, G15, I15',
+    'F2, J2, H4, B6, N6, D8, L8, B10, N10, H12, F14, J14',
+    'C2, M2, B3, E3, K3, N3, C5, G5, I5, M5, E7, K7, E9, K9, C11, G11, I11, M11, B13, E13, K13, N13, C14, M14'
+  ),
+};
+
+const PREMIUM_META = {
+  W3: { label: 'x3\nслово', short: 'x3С', mult: 3, kind: 'word', classes: 'bg-board-w3/90 text-white' },
+  W2: { label: 'x2\nслово', short: 'x2С', mult: 2, kind: 'word', classes: 'bg-board-w2/90 text-white' },
+  L3: { label: 'x3\nбуква', short: 'x3Б', mult: 3, kind: 'letter', classes: 'bg-board-l3/90 text-white' },
+  L2: { label: 'x2\nбуква', short: 'x2Б', mult: 2, kind: 'letter', classes: 'bg-board-l2/90 text-white' },
+};
+
+function cellKey(col, row) { return `${col},${row}`; }
+function isCorner(col, row) { return (col===1||col===15) && (row===1||row===15); }
+function inBounds(col, row) { return col>=1 && col<=15 && row>=1 && row<=15; }
+
+/* ============================================================================
+   §3. СЛОВАРЬ: загрузка russian_words_nouns.txt и индексация
+   Формат: обычный текстовый файл, одно слово (существительное, им.п., ед.ч.)
+   на строку. Регистр не важен, пустые строки и не-кириллические строки
+   игнорируются.
+   ========================================================================= */
+
+function normalizeWord(w) {
+  return w.trim().toUpperCase().replace(/Ё/g, 'Е');
+}
+
+async function loadDictionary(onProgress) {
+  const res = await fetch('./russian_words_nouns.txt');
+  if (!res.ok) throw new Error('Не удалось загрузить russian_words_nouns.txt (HTTP ' + res.status + ')');
+  const text = await res.text();
+  const lines = text.split(/\r?\n/);
+  const wordSet = new Set();
+  const byLength = new Map();
+  const startCount = {}; // letter -> count of words (len<=7) starting with it, для угловой стратегии
+  for (let i = 0; i < lines.length; i++) {
+    const w = normalizeWord(lines[i]);
+    if (!w || w.length < 2 || w.length > 15) continue;
+    if (!/^[А-Я]+$/.test(w)) continue;
+    if (wordSet.has(w)) continue;
+    wordSet.add(w);
+    if (!byLength.has(w.length)) byLength.set(w.length, []);
+    byLength.get(w.length).push(w);
+    if (w.length <= 7) {
+      const c0 = w[0];
+      startCount[c0] = (startCount[c0] || 0) + 1;
+    }
+    if (onProgress && i % 5000 === 0) onProgress(i, lines.length);
+  }
+  return { wordSet, byLength, startCount, size: wordSet.size };
+}
+
+function computeHardStartLetters(dict) {
+  const hard = new Set(HARD_START_LETTERS_SEED);
+  if (dict && dict.startCount) {
+    RUSSIAN_ALPHABET.forEach(l => {
+      const c = dict.startCount[l] || 0;
+      if (c < 15) hard.add(l);
+    });
+  }
+  return hard;
+}
+
+/* ============================================================================
+   §4. СОСТОЯНИЕ ДОСКИ
+   board: Map "col,row" -> { letter, isBlank, moveIndex, player }
+   ========================================================================= */
+
+function emptyBoard() { return {}; }
+
+function boardGet(board, col, row) { return board[cellKey(col,row)] || null; }
+
+function letterScore(letter, isBlank) { return isBlank ? 0 : (LETTER_VALUES[letter] || 0); }
+
+// direction: 'H' (буквы идут слева направо, col растёт) | 'V' (сверху вниз, row растёт)
+function step(col, row, dir) { return dir === 'H' ? { col: col+1, row } : { col, row: row+1 }; }
+function back(col, row, dir) { return dir === 'H' ? { col: col-1, row } : { col, row: row-1 }; }
+function perp(dir) { return dir === 'H' ? 'V' : 'H'; }
+
+// Собирает слово, которое образуется на линии perp-направления, проходящей через (col,row),
+// если в эту клетку поставить newLetter. Возвращает {word, cells} или null, если кросс-слова нет
+// (т.е. клетка изолирована сверху/снизу либо слева/справа).
+function buildCrossWord(board, col, row, newLetter, isBlank, mainDir) {
+  const d = perp(mainDir);
+  let sCol = col, sRow = row;
+  while (true) {
+    const p = back(sCol, sRow, d);
+    if (!inBounds(p.col, p.row)) break;
+    const occ = boardGet(board, p.col, p.row);
+    if (!occ) break;
+    sCol = p.col; sRow = p.row;
+  }
+  const cells = [];
+  let cCol = sCol, cRow = sRow;
+  while (inBounds(cCol, cRow)) {
+    if (cCol === col && cRow === row) {
+      cells.push({ col: cCol, row: cRow, letter: newLetter, isBlank, isNew: true });
+    } else {
+      const occ = boardGet(board, cCol, cRow);
+      if (!occ) break;
+      cells.push({ col: cCol, row: cRow, letter: occ.letter, isBlank: occ.isBlank, isNew: false });
+    }
+    const n = step(cCol, cRow, d);
+    if (!inBounds(n.col, n.row)) break;
+    const occAtNext = (n.col===col && n.row===row) ? true : !!boardGet(board, n.col, n.row);
+    if (!occAtNext) break;
+    cCol = n.col; cRow = n.row;
+  }
+  if (cells.length < 2) return null;
+  return { word: cells.map(c=>c.letter).join(''), cells };
+}
+
+function scoreCellSet(cells, layout) {
+  // cells: [{col,row,letter,isBlank,isNew}]; премии учитываются ТОЛЬКО для isNew клеток.
+  let letterSum = 0;
+  let wordMultSum = 0;
+  cells.forEach(c => {
+    const base = letterScore(c.letter, c.isBlank);
+    let val = base;
+    if (c.isNew) {
+      const premium = layout.grid[cellKey(c.col, c.row)];
+      const meta = premium ? PREMIUM_META[premium] : null;
+      if (meta && meta.kind === 'letter') val = base * meta.mult;
+      if (meta && meta.kind === 'word') wordMultSum += meta.mult;
+    }
+    letterSum += val;
+  });
+  const factor = wordMultSum === 0 ? 1 : wordMultSum;
+  return letterSum * factor;
+}
+
+// Полный подсчёт хода: mainCells — все клетки главного слова (старые+новые), layout — раскладка доски,
+// board — доска ДО хода (нужна для поиска кросс-слов у новых клеток).
+function scoreMove(board, mainCells, dir, layout) {
+  const mainScore = scoreCellSet(mainCells, layout);
+  const crossDetails = [];
+  mainCells.filter(c => c.isNew).forEach(c => {
+    const cw = buildCrossWord(board, c.col, c.row, c.letter, c.isBlank, dir);
+    if (cw) {
+      const sc = scoreCellSet(cw.cells, layout);
+      crossDetails.push({ word: cw.word, score: sc });
+    }
+  });
+  const newTilesCount = mainCells.filter(c => c.isNew).length;
+  const bingo = newTilesCount === RACK_SIZE;
+  const crossScore = crossDetails.reduce((a,c)=>a+c.score, 0);
+  const total = mainScore + crossScore + (bingo ? BINGO_BONUS : 0);
+  return { mainScore, crossDetails, crossScore, bingo, total, newTilesCount };
+}
+
+/* ============================================================================
+   §5. КРОСС-ЧЕК: для каждой пустой клетки — какие буквы допустимы,
+   чтобы образующееся перпендикулярное слово было в словаре (или клетка изолирована).
+   Возвращает Map "col,row" -> Set<letter> | null (null = любая буква допустима).
+   ========================================================================= */
+
+function computeCrossChecks(board, dict, mainDir) {
+  const d = perp(mainDir);
+  const grid = {};
+  for (let col = 1; col <= 15; col++) {
+    for (let row = 1; row <= 15; row++) {
+      if (boardGet(board, col, row)) continue;
+      const prefix = [];
+      { let p = back(col, row, d); while (inBounds(p.col,p.row)) { const occ = boardGet(board,p.col,p.row); if (!occ) break; prefix.unshift(occ.letter); p = back(p.col,p.row,d); } }
+      const suffix = [];
+      { let n = step(col, row, d); while (inBounds(n.col,n.row)) { const occ = boardGet(board,n.col,n.row); if (!occ) break; suffix.push(occ.letter); n = step(n.col,n.row,d); } }
+      if (prefix.length === 0 && suffix.length === 0) { grid[cellKey(col,row)] = null; continue; }
+      const allowed = new Set();
+      RUSSIAN_ALPHABET.forEach(L => {
+        const w = prefix.join('') + L + suffix.join('');
+        if (dict.wordSet.has(w)) allowed.add(L);
+      });
+      grid[cellKey(col,row)] = allowed;
+    }
+  }
+  return grid;
+}
+
+/* ============================================================================
+   §6. МЕШОК: учёт расхода букв
+   "Известный" пул = буквы на доске (видны оба игрока) + буквы в моей руке + сожжённые.
+   "Неизвестный" пул = мешок + рука соперника (нельзя различить без данных о ходах соперника).
+   ========================================================================= */
+
+function computeBagState(board, myRack, burnedLetters, oppHandCount) {
+  const onBoard = {}; let jokersOnBoard = 0;
+  Object.values(board).forEach(t => {
+    if (t.isBlank) jokersOnBoard++;
+    else onBoard[t.letter] = (onBoard[t.letter]||0) + 1;
+  });
+  const inRack = {}; let jokersInRack = 0;
+  myRack.forEach(l => { if (l === '*') jokersInRack++; else inRack[l] = (inRack[l]||0) + 1; });
+  const burned = {}; let jokersBurned = 0;
+  burnedLetters.forEach(l => { if (l === '*') jokersBurned++; else burned[l] = (burned[l]||0) + 1; });
+
+  const perLetterUnknownPool = {};
+  RUSSIAN_ALPHABET.forEach(L => {
+    const used = (onBoard[L]||0) + (inRack[L]||0) + (burned[L]||0);
+    perLetterUnknownPool[L] = Math.max(0, (BAG_INITIAL[L]||0) - used);
+  });
+  const jokersUnknownPool = Math.max(0, JOKER_COUNT_INITIAL - jokersOnBoard - jokersInRack - jokersBurned);
+
+  const unknownPoolTotal = Object.values(perLetterUnknownPool).reduce((a,b)=>a+b,0) + jokersUnknownPool;
+  const bagOnlyTotal = Math.max(0, unknownPoolTotal - oppHandCount);
+
+  return { perLetterUnknownPool, jokersUnknownPool, unknownPoolTotal, oppHandCount, bagOnlyTotal };
+}
+
+/* ============================================================================
+   §7. РИСК ДОСТРОЙКИ (Extension Risk)
+   Проверяет, может ли соперник дописать буквы спереди/сзади к нашему слову,
+   используя не более maxExtra фишек, с учётом реальных пустых клеток на доске.
+   ========================================================================= */
+
+function emptyRunLength(board, col, row, dir, sign) {
+  // считает сколько подряд пустых клеток от (col,row) в направлении dir*sign (не включая занятые)
+  let n = 0, c = col, r = row;
+  while (true) {
+    const nx = sign > 0 ? step(c, r, dir) : back(c, r, dir);
+    if (!inBounds(nx.col, nx.row)) break;
+    if (boardGet(board, nx.col, nx.row)) break;
+    n++; c = nx.col; r = nx.row;
+    if (n > 7) break;
+  }
+  return n;
+}
+
+function checkExtensionRisk(board, mainCells, dir, dict, maxExtra = 7) {
+  const word = mainCells.map(c => c.letter).join('');
+  const first = mainCells[0], last = mainCells[mainCells.length - 1];
+  const maxFront = emptyRunLength(board, first.col, first.row, dir, -1);
+  const maxBack = emptyRunLength(board, last.col, last.row, dir, +1);
+  if (maxFront === 0 && maxBack === 0) return { risky: false, options: [] };
+  const bucket = dict.byLength;
+  const found = [];
+  const seen = new Set();
+  for (let extra = 1; extra <= Math.min(maxExtra, maxFront + maxBack); extra++) {
+    const totalLen = word.length + extra;
+    const list = bucket.get(totalLen);
+    if (!list) continue;
+    for (let fi = 0; fi <= Math.min(extra, maxFront); fi++) {
+      const bi = extra - fi;
+      if (bi > maxBack) continue;
+      for (let i = 0; i < list.length; i++) {
+        const w = list[i];
+        if (w.slice(fi, fi + word.length) === word) {
+          if (!seen.has(w)) { seen.add(w); found.push(w); }
+        }
+      }
+    }
+  }
+  return { risky: found.length > 0, options: found.slice(0, 6) };
+}
+
+/* ============================================================================
+   §8. УГЛОВАЯ СТРАТЕГИЯ
+   Штраф/бонус к тактическому рейтингу за размещение буквы на клетке x3 слово
+   (включая истинные углы и краевые тройные слова), в зависимости от того,
+   насколько сложно с этой буквы начать слово.
+   ========================================================================= */
+
+const CORNER_PENALTY = 9;
+const CORNER_BONUS = 12;
+
+function cornerAdjustment(mainCells, layout, hardStartLetters) {
+  let adj = 0;
+  const notes = [];
+  mainCells.filter(c => c.isNew).forEach(c => {
+    const premium = layout.grid[cellKey(c.col, c.row)];
+    if (premium !== 'W3') return;
+    const hard = hardStartLetters.has(c.letter) || c.isBlank === false && c.letter === '*';
+    if (hard) { adj += CORNER_BONUS; notes.push(`«${c.letter}» надёжно блокирует x3-слово (${COL_LETTERS[c.col-1]}${c.row})`); }
+    else { adj -= CORNER_PENALTY; notes.push(`лёгкая буква «${c.letter}» на x3-слово (${COL_LETTERS[c.col-1]}${c.row}) — риск для этой зоны`); }
+  });
+  return { adj, notes };
+}
+
+/* ============================================================================
+   §9. ГЕНЕРАТОР ХОДОВ (anchor/segment-scan)
+   Перебирает все линии доски, все допустимые отрезки (начало+длина), сверяет
+   с якорями (примыкание к уже выставленным буквам) и словарём, с учётом
+   кросс-чека и наличия фишек в руке (включая джокеры).
+   ========================================================================= */
+
+function premiumLetterMult(layout, col, row) {
+  const p = layout.grid[cellKey(col, row)];
+  const meta = p ? PREMIUM_META[p] : null;
+  return (meta && meta.kind === 'letter') ? meta.mult : 1;
+}
+
+function segCell(dir, lineIdx, pos) { return dir === 'H' ? { col: pos, row: lineIdx } : { col: lineIdx, row: pos }; }
+
+function rackToCounts(rack) {
+  const counts = {}; let jokers = 0;
+  rack.forEach(l => { if (l === '*') jokers++; else counts[l] = (counts[l]||0) + 1; });
+  return { counts, jokers };
+}
+
+function multisetDeficit(required, rackCounts) {
+  let deficit = 0;
+  Object.keys(required).forEach(L => {
+    const have = rackCounts[L] || 0;
+    if (required[L] > have) deficit += required[L] - have;
+  });
+  return deficit;
+}
+
+function assignTiles(slots, rackCounts, jokerAvailable, layout) {
+  const byLetter = {};
+  slots.forEach(s => { (byLetter[s.letter] = byLetter[s.letter] || []).push(s); });
+  const rackLeft = { ...rackCounts };
+  let jokersLeft = jokerAvailable, jokersUsed = 0;
+  const isBlankMap = new Map();
+  Object.keys(byLetter).forEach(L => {
+    const list = byLetter[L].slice().sort((a,b) => premiumLetterMult(layout,b.col,b.row) - premiumLetterMult(layout,a.col,a.row));
+    const have = rackLeft[L] || 0;
+    list.forEach((s, idx) => {
+      if (idx < have) isBlankMap.set(cellKey(s.col,s.row), false);
+      else { isBlankMap.set(cellKey(s.col,s.row), true); jokersLeft--; jokersUsed++; }
+    });
+    rackLeft[L] = Math.max(0, have - list.length);
+  });
+  return { isBlankMap, jokersUsed, ok: jokersLeft >= 0 };
+}
+
+function generateCandidates(board, rack, dict, layout, hardStartLetters, opts = {}) {
+  const limit = opts.limit || 20;
+  const extraJokers = opts.extraJokers || 0;
+  const timeBudgetMs = opts.timeBudgetMs || 1800;
+  const t0 = performance.now();
+  const isFirstMove = Object.keys(board).length === 0;
+  const { counts: rackCounts, jokers: realJokers } = rackToCounts(rack);
+  const jokerAvailable = realJokers + extraJokers;
+
+  const crossChecks = { H: computeCrossChecks(board, dict, 'H'), V: computeCrossChecks(board, dict, 'V') };
+  const raw = [];
+  let timedOut = false;
+
+  ['H','V'].forEach(dir => {
+    if (timedOut) return;
+    for (let lineIdx = 1; lineIdx <= 15; lineIdx++) {
+      for (let s = 1; s <= 15; s++) {
+        for (let L = 2; s + L - 1 <= 15; L++) {
+          if (performance.now() - t0 > timeBudgetMs) { timedOut = true; return; }
+          const end = s + L - 1;
+          const before = segCell(dir, lineIdx, s - 1);
+          const after = segCell(dir, lineIdx, end + 1);
+          if (inBounds(before.col, before.row) && boardGet(board, before.col, before.row)) continue;
+          if (inBounds(after.col, after.row) && boardGet(board, after.col, after.row)) continue;
+
+          const cells = [];
+          let touchesBoard = false, fixedCount = 0, emptyCount = 0;
+          let includesCenter = false;
+          for (let pos = s; pos <= end; pos++) {
+            const { col, row } = segCell(dir, lineIdx, pos);
+            if (col === CENTER.col && row === CENTER.row) includesCenter = true;
+            const occ = boardGet(board, col, row);
+            if (occ) { fixedCount++; touchesBoard = true; cells.push({ col, row, fixed: true, letter: occ.letter, isBlank: occ.isBlank }); }
+            else {
+              emptyCount++;
+              const cc = crossChecks[dir][cellKey(col,row)];
+              if (cc !== null && cc !== undefined) touchesBoard = true; // есть перпендикулярный сосед
+              cells.push({ col, row, fixed: false, crossAllowed: cc });
+            }
+          }
+          if (isFirstMove) { if (!includesCenter) continue; }
+          else if (!touchesBoard) continue;
+          if (emptyCount === 0) continue; // нет новых фишек — не ход
+          if (emptyCount > RACK_SIZE) continue;
+
+          const wordList = dict.byLength.get(L);
+          if (!wordList) continue;
+
+          for (let wi = 0; wi < wordList.length; wi++) {
+            const w = wordList[wi];
+            let match = true;
+            for (let i = 0; i < cells.length; i++) {
+              const c = cells[i]; const ch = w[i];
+              if (c.fixed) { if (c.letter !== ch) { match = false; break; } }
+              else if (c.crossAllowed !== null && c.crossAllowed !== undefined && !c.crossAllowed.has(ch)) { match = false; break; }
+            }
+            if (!match) continue;
+            const required = {};
+            for (let i = 0; i < cells.length; i++) if (!cells[i].fixed) required[w[i]] = (required[w[i]]||0) + 1;
+            if (multisetDeficit(required, rackCounts) > jokerAvailable) continue;
+
+            const slots = [];
+            for (let i = 0; i < cells.length; i++) if (!cells[i].fixed) slots.push({ col: cells[i].col, row: cells[i].row, letter: w[i] });
+            const { isBlankMap, jokersUsed } = assignTiles(slots, rackCounts, jokerAvailable, layout);
+
+            const mainCells = [];
+            for (let i = 0; i < cells.length; i++) {
+              const c = cells[i];
+              if (c.fixed) mainCells.push({ col: c.col, row: c.row, letter: c.letter, isBlank: c.isBlank, isNew: false });
+              else mainCells.push({ col: c.col, row: c.row, letter: w[i], isBlank: isBlankMap.get(cellKey(c.col,c.row)), isNew: true });
+            }
+            const scoreDetail = scoreMove(board, mainCells, dir, layout);
+            const { adj: cornerAdj, notes: cornerNotes } = cornerAdjustment(mainCells, layout, hardStartLetters);
+            raw.push({
+              word: w, dir, lineIdx, start: s, end,
+              startCell: segCell(dir, lineIdx, s),
+              mainCells, scoreDetail, cornerAdj, cornerNotes, jokersUsed,
+              needsExtraJokers: Math.max(0, jokersUsed - realJokers),
+            });
+          }
+          if (performance.now() - t0 > timeBudgetMs) { timedOut = true; break; }
+        }
+        if (timedOut) break;
+      }
+      if (timedOut) break;
+    }
+  });
+
+  // грубая сортировка и предфильтр для расчёта риска (дорогая операция) только у лидеров
+  raw.sort((a,b) => (b.scoreDetail.total + b.cornerAdj) - (a.scoreDetail.total + a.cornerAdj));
+  const RISK_HEAD = 60;
+  const head = raw.slice(0, RISK_HEAD);
+  head.forEach(cand => {
+    const risk = checkExtensionRisk(board, cand.mainCells, cand.dir, dict, 7);
+    const riskPenalty = risk.risky ? (6 + 3 * Math.min(risk.options.length, 4)) : 0;
+    cand.risk = risk;
+    cand.riskPenalty = riskPenalty;
+    cand.sortScore = cand.scoreDetail.total + cand.cornerAdj - riskPenalty;
+  });
+  const dedup = new Map();
+  head.forEach(c => {
+    const key = c.dir + '|' + c.startCell.col + ',' + c.startCell.row + '|' + c.word;
+    if (!dedup.has(key)) dedup.set(key, c);
+  });
+  const finalList = Array.from(dedup.values()).sort((a,b) => b.sortScore - a.sortScore);
+
+  const standard = finalList.filter(c => c.needsExtraJokers === 0).slice(0, limit);
+  const jokerNeeded = extraJokers > 0
+    ? finalList.filter(c => c.needsExtraJokers > 0).slice(0, 8)
+    : [];
+
+  return { standard, jokerNeeded, timedOut, scannedCount: raw.length };
+}
+
+/* ============================================================================
+   §10. ВАЛИДАЦИЯ РУЧНОГО ВВОДА ХОДА
+   ========================================================================= */
+
+function computeMainCellsForWord(board, dir, startCell, word) {
+  const cells = [];
+  let col = startCell.col, row = startCell.row;
+  for (let i = 0; i < word.length; i++) {
+    if (!inBounds(col, row)) return { ok: false, error: 'Слово выходит за пределы доски.' };
+    const occ = boardGet(board, col, row);
+    const ch = word[i];
+    if (occ) {
+      if (occ.letter !== ch) return { ok: false, error: `Буква «${ch}» не совпадает с уже стоящей «${occ.letter}» в клетке ${COL_LETTERS[col-1]}${row}.` };
+      cells.push({ col, row, letter: ch, isBlank: occ.isBlank, isNew: false });
+    } else {
+      cells.push({ col, row, letter: ch, isBlank: false, isNew: true });
+    }
+    const n = step(col, row, dir); col = n.col; row = n.row;
+  }
+  const before = back(startCell.col, startCell.row, dir);
+  const after = { col, row }; // уже указывает на клетку сразу за словом
+  if (inBounds(before.col, before.row) && boardGet(board, before.col, before.row)) {
+    return { ok: false, error: 'Перед словом уже есть буква — слово должно начинаться раньше или пересекать её.' };
+  }
+  if (inBounds(after.col, after.row) && boardGet(board, after.col, after.row)) {
+    return { ok: false, error: 'После слова уже есть буква — увеличьте слово или сместите начало.' };
+  }
+  const isFirstMove = Object.keys(board).length === 0;
+  const touchesBoard = cells.some(c => !c.isNew) || cells.some(c => {
+    if (!c.isNew) return false;
+    const d = perp(dir);
+    const p1 = back(c.col, c.row, d), p2 = step(c.col, c.row, d);
+    return (inBounds(p1.col,p1.row) && boardGet(board,p1.col,p1.row)) || (inBounds(p2.col,p2.row) && boardGet(board,p2.col,p2.row));
+  });
+  const includesCenter = cells.some(c => c.col === CENTER.col && c.row === CENTER.row);
+  if (isFirstMove && !includesCenter) return { ok: false, error: 'Первый ход обязан проходить через центральную клетку.' };
+  if (!isFirstMove && !touchesBoard) return { ok: false, error: 'Слово должно пересекать или примыкать к уже выставленным буквам.' };
+  if (!cells.some(c => c.isNew)) return { ok: false, error: 'В слове нет ни одной новой буквы.' };
+  return { ok: true, cells, isFirstMove };
+}
+
+/* ============================================================================
+   §11. ИКОНКИ (простые линейные SVG, без внешних зависимостей)
+   ========================================================================= */
+
+function Icon({ path, size = 18, className = '', strokeWidth = 1.8, viewBox = "0 0 24 24" }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox={viewBox} fill="none"
+      stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {path}
+    </svg>
+  );
+}
+const ICONS = {
+  board: <><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></>,
+  dice: <><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1" fill="currentColor"/><circle cx="16" cy="16" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="16" cy="8" r="1" fill="currentColor"/><circle cx="8" cy="16" r="1" fill="currentColor"/></>,
+  sack: <><path d="M7 4h10l1.5 4.5a7 7 0 1 1-13 0L7 4Z"/><path d="M9 4c0 1.5.9 2.5 3 2.5s3-1 3-2.5"/></>,
+  history: <><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 3"/></>,
+  sparkles: <><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/><circle cx="12" cy="12" r="2.2"/></>,
+  gem: <><path d="M6 4h12l3 5-9 11L3 9l3-5Z"/><path d="M3 9h18M9 4l3 5 3-5M12 9l0 11"/></>,
+  warn: <><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17" r="0.8" fill="currentColor"/></>,
+  undo: <><path d="M3 10h11a5 5 0 0 1 0 10H9"/><path d="M8 5 3 10l5 5"/></>,
+  swap: <><path d="M7 4 3 8l4 4"/><path d="M3 8h13a4 4 0 0 1 4 4v1"/><path d="M17 20l4-4-4-4"/><path d="M21 16H8a4 4 0 0 1-4-4v-1"/></>,
+  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z"/></>,
+  check: <path d="m4 12 5 5L20 6"/>,
+  x: <><path d="M6 6l12 12M18 6 6 18"/></>,
+  target: <><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/></>,
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6"/>,
+  arrowDown: <path d="M12 5v14M6 13l6 6 6-6"/>,
+  flame: <path d="M12 2c1 3-2 4-2 7a4 4 0 1 0 8 0c0-1-.5-2-1-2 .3 2-1 3-2 3-1.5 0-2-1.3-1-3C15 5 13 3 12 2Z"/>,
+  layers: <><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></>,
+  plus: <path d="M12 5v14M5 12h14"/>,
+  bag: <><path d="M6 7l1-3h10l1 3"/><path d="M4 7h16l-1.2 12.2A2 2 0 0 1 16.8 21H7.2a2 2 0 0 1-2-1.8L4 7Z"/></>,
+};
+function I(name, props={}) { return <Icon path={ICONS[name]} {...props} />; }
+
+/* ============================================================================
+   §12. UI-ПРИМИТИВЫ
+   ========================================================================= */
+
+function Card({ children, className = '' }) {
+  return <div className={`glass rounded-2xl shadow-card ${className}`}>{children}</div>;
+}
+function Badge({ children, tone = 'default', className = '' }) {
+  const tones = {
+    default: 'bg-ink-700 text-ink-100 border-ink-600',
+    gold: 'bg-gold-500/15 text-gold-200 border-gold-500/40',
+    danger: 'bg-red-500/15 text-red-300 border-red-500/40',
+    ok: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40',
+    info: 'bg-blue-500/15 text-blue-300 border-blue-500/40',
+  };
+  return <span className={`inline-flex items-center gap-1 text-[11px] font-semibold tracking-wide uppercase px-2 py-1 rounded-full border ${tones[tone]} ${className}`}>{children}</span>;
+}
+function Button({ children, onClick, variant = 'default', className = '', disabled, size = 'md', title }) {
+  const variants = {
+    default: 'bg-ink-800 hover:bg-ink-700 text-ink-100 border border-ink-600',
+    gold: 'bg-gradient-to-b from-gold-400 to-gold-600 hover:from-gold-300 hover:to-gold-500 text-ink-950 font-bold shadow-glow border border-gold-300/50',
+    ghost: 'bg-transparent hover:bg-ink-800 text-ink-200 border border-transparent',
+    danger: 'bg-red-900/40 hover:bg-red-900/60 text-red-200 border border-red-700/50',
+  };
+  const sizes = { sm: 'px-2.5 py-1.5 text-xs', md: 'px-4 py-2.5 text-sm', lg: 'px-6 py-3 text-base' };
+  return (
+    <button title={title} disabled={disabled} onClick={onClick}
+      className={`rounded-xl transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none font-body font-semibold inline-flex items-center justify-center gap-1.5 ${variants[variant]} ${sizes[size]} ${className}`}>
+      {children}
+    </button>
+  );
+}
+function Modal({ open, onClose, title, children, wide }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose}></div>
+      <div className={`relative w-full ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'} glass rounded-t-3xl sm:rounded-3xl p-5 animate-rise max-h-[85vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-base text-gold-200">{title}</h3>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-100 p-1"><Icon path={ICONS.x} size={20}/></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   §13. ДОСКА
+   ========================================================================= */
+
+const MOVE_COLORS = ['#e0a72a','#2f7fc1','#c23b3b','#3f9d5d','#a06bcf','#e0678a','#4fd1c5','#f0a868','#8ab6e0','#d4d95f','#e08ac0','#7fd1e0'];
+function moveColor(idx) { return MOVE_COLORS[idx % MOVE_COLORS.length]; }
+
+function BoardCell({ col, row, tile, ghost, premium, isStart, isCenter, onClick }) {
+  const isCornerCell = isCorner(col, row);
+  let content = null;
+  let cellStyle = {};
+  let baseClasses = 'relative aspect-square flex items-center justify-center select-none board-cell-shadow rounded-[3px] text-[9px] leading-none';
+
+  if (tile || ghost) {
+    const t = tile || ghost;
+    const val = letterScore(t.letter, t.isBlank);
+    baseClasses += ` tile-face ${t.player === 'opp' ? 'opp' : ''} ${ghost ? 'ghost animate-pop' : 'animate-pop'} font-display font-bold text-[13px] sm:text-[15px]`;
+    if (tile && tile.moveIndex != null) { cellStyle.boxShadow = `0 0 0 2px ${moveColor(tile.moveIndex)} inset, 0 2px 0 #8a6a1f, 0 4px 8px rgba(0,0,0,.4)`; }
+    content = (
+      <>
+        <span>{t.isBlank ? t.letter.toLowerCase() : t.letter}</span>
+        <span className="absolute bottom-[1px] right-[2px] text-[7px] font-body font-semibold opacity-70">{val || ''}</span>
+      </>
+    );
+  } else if (isCenter) {
+    baseClasses += ' bg-gold-500/25 text-gold-200';
+    content = <Icon path={ICONS.target} size={13} strokeWidth={2}/>;
+  } else if (premium) {
+    const meta = PREMIUM_META[premium];
+    baseClasses += ` ${meta.classes} font-bold`;
+    content = <span className="text-center leading-[9px] whitespace-pre-line text-[7.5px] sm:text-[8.5px]">{meta.label}</span>;
+  } else {
+    baseClasses += ' bg-ink-800/70 hover:bg-ink-700/70';
+  }
+  if (isCornerCell) baseClasses += ' ring-1 ring-inset ring-gold-500/30';
+  if (isStart) { cellStyle.outline = '2px solid #f2d98d'; cellStyle.outlineOffset = '-2px'; cellStyle.zIndex = 5; }
+
+  return <div className={baseClasses} style={cellStyle} onClick={onClick}>{content}</div>;
+}
+
+function Board({ board, layout, ghostMap, startCell, onCellClick }) {
+  const cols = Array.from({length:15}, (_,i)=>i+1);
+  const rows = Array.from({length:15}, (_,i)=>i+1);
+  return (
+    <div className="overflow-auto scrollbar-none rounded-2xl border border-ink-700/60 bg-ink-900/60 p-2">
+      <div className="inline-grid" style={{ gridTemplateColumns: `20px repeat(15, minmax(24px, 1fr))`, minWidth: '520px', gap: '2px' }}>
+        <div></div>
+        {cols.map(c => <div key={'h'+c} className="text-center text-[9px] text-ink-500 font-semibold pb-0.5">{COL_LETTERS[c-1]}</div>)}
+        {rows.map(r => (
+          <Fragment key={'row'+r}>
+            <div className="text-[9px] text-ink-500 font-semibold flex items-center justify-center">{r}</div>
+            {cols.map(c => {
+              const key = cellKey(c,r);
+              const tile = board[key];
+              const ghost = ghostMap ? ghostMap.get(key) : null;
+              const premium = layout.grid[key];
+              const isCenter = c===CENTER.col && r===CENTER.row;
+              const isStart = startCell && startCell.col===c && startCell.row===r;
+              return (
+                <BoardCell key={key} col={c} row={r} tile={tile} ghost={ghost} premium={premium}
+                  isCenter={isCenter && !tile} isStart={isStart}
+                  onClick={() => onCellClick && onCellClick(c,r)} />
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   §14. РУЧКА (МОИ ФИШКИ) И ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ ПРЕВЬЮ
+   ========================================================================= */
+
+function parseRack(text) {
+  return text.toUpperCase().replace(/Ё/g,'Е').split('').filter(ch => /[А-Я]/.test(ch) || ch === '*').slice(0, RACK_SIZE);
+}
+
+function RackEditor({ value, onChange, bagState }) {
+  const letters = parseRack(value);
+  const slots = Array.from({length: RACK_SIZE}, (_,i) => letters[i] || null);
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Мои фишки (рука)</label>
+        <span className="text-[11px] text-ink-500">{letters.length}/7 · джокер = *</span>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 mb-2.5">
+        {slots.map((l,i) => (
+          <div key={i} className={`aspect-square rounded-lg flex items-center justify-center font-display font-bold text-base sm:text-lg ${l ? 'tile-face animate-pop' : 'bg-ink-800/60 border border-dashed border-ink-600'}`}>
+            {l === '*' ? '★' : l}
+          </div>
+        ))}
+      </div>
+      <input
+        type="text"
+        inputMode="text"
+        value={value}
+        onChange={e => onChange(e.target.value.toUpperCase().replace(/Ё/g,'Е').slice(0,7))}
+        placeholder="напр. СЛОНА*Т"
+        className="w-full bg-ink-800/70 border border-ink-600 rounded-xl px-3 py-2.5 text-sm font-body tracking-[0.15em] text-center focus:border-gold-400"
+      />
+    </div>
+  );
+}
+
+function ScoreBreakdown({ detail, cornerAdj, cornerNotes, risk }) {
+  if (!detail) return null;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-end gap-3">
+        <div className="font-display text-3xl text-gold-200 leading-none">{detail.total}</div>
+        <div className="text-xs text-ink-400 pb-0.5">очков за ход</div>
+        {detail.bingo && <Badge tone="gold" className="ml-auto">+15 бинго 🎉</Badge>}
+      </div>
+      <div className="text-xs text-ink-400 space-y-0.5">
+        <div>Главное слово: <span className="text-ink-200 font-semibold">{detail.mainScore}</span></div>
+        {detail.crossDetails.map((c,i) => (
+          <div key={i}>Кросс-слово «{c.word.toLowerCase()}»: <span className="text-ink-200 font-semibold">{c.score}</span></div>
+        ))}
+      </div>
+      {(cornerNotes && cornerNotes.length > 0) && (
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {cornerNotes.map((n,i) => (
+            <Badge key={i} tone={cornerAdj >= 0 ? 'ok' : 'danger'}>{n}</Badge>
+          ))}
+        </div>
+      )}
+      {risk && risk.risky && (
+        <div className="mt-1 flex items-start gap-1.5 text-amber-300 text-xs bg-amber-500/10 border border-amber-500/30 rounded-lg px-2.5 py-2">
+          <Icon path={ICONS.warn} size={14} className="mt-0.5 shrink-0"/>
+          <div>Соперник может достроить: <span className="font-semibold">{risk.options.map(w=>w.toLowerCase()).join(', ')}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PreviewStrip({ cells, onToggleBlank, editable }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {cells.map((c,i) => (
+        <button key={i} type="button" disabled={!c.isNew || !editable}
+          onClick={() => onToggleBlank && onToggleBlank(i)}
+          className={`w-9 h-9 rounded-lg flex items-center justify-center font-display font-bold text-sm relative
+            ${c.isNew ? 'tile-face ' + (c.isBlank ? 'ghost' : '') : 'bg-ink-700 text-ink-300'}
+            ${c.isNew && editable ? 'cursor-pointer hover:scale-105' : ''}`}
+          title={c.isNew ? (c.isBlank ? 'Джокер — нажмите, чтобы сделать обычной фишкой' : 'Обычная фишка — нажмите для джокера') : 'уже на доске'}>
+          {c.letter}
+          {!c.isNew && <span className="absolute -bottom-1 -right-1 text-[8px] text-ink-500">•</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ============================================================================
+   §15. ПАНЕЛЬ ЗАПИСИ ХОДА
+   ========================================================================= */
+
+function MoveEntryPanel({ board, layout, dict, hardStartLetters, myRack, activePlayer, setActivePlayer,
+  dir, setDir, startCell, setStartCell, pickingStart, setPickingStart, wordInput, setWordInput,
+  onGhostChange, onCommit, notify }) {
+
+  const validation = useMemo(() => {
+    if (!startCell || !wordInput || wordInput.length < 2) return null;
+    return computeMainCellsForWord(board, dir, startCell, wordInput);
+  }, [board, dir, startCell, wordInput]);
+
+  const dictHit = validation && validation.ok ? dict.wordSet.has(wordInput) : null;
+
+  const [manualBlanks, setManualBlanks] = useState({}); // index -> bool override
+
+  const pendingCells = useMemo(() => {
+    if (!validation || !validation.ok) return null;
+    const rackArr = parseRack(myRack);
+    const { counts: rackCounts, jokers } = rackToCounts(rackArr);
+    const isNewSlots = validation.cells.filter(c => c.isNew).map(c => ({ col:c.col, row:c.row, letter:c.letter }));
+    let autoBlank = new Map();
+    if (activePlayer === 'me' && isNewSlots.length) {
+      const { isBlankMap } = assignTiles(isNewSlots, rackCounts, jokers, layout);
+      autoBlank = isBlankMap;
+    }
+    return validation.cells.map((c,i) => {
+      if (!c.isNew) return c;
+      const auto = autoBlank.get(cellKey(c.col,c.row)) || false;
+      const manual = manualBlanks[i];
+      return { ...c, isBlank: manual !== undefined ? manual : auto };
+    });
+  }, [validation, myRack, activePlayer, layout, manualBlanks]);
+
+  useEffect(() => { setManualBlanks({}); }, [wordInput, dir, startCell, activePlayer]);
+
+  const scoreDetail = useMemo(() => pendingCells ? scoreMove(board, pendingCells, dir, layout) : null, [pendingCells, board, dir, layout]);
+  const cornerInfo = useMemo(() => pendingCells ? cornerAdjustment(pendingCells, layout, hardStartLetters) : { adj:0, notes:[] }, [pendingCells, layout, hardStartLetters]);
+  const risk = useMemo(() => pendingCells ? checkExtensionRisk(board, pendingCells, dir, dict, 7) : null, [pendingCells, board, dir, dict]);
+
+  useEffect(() => {
+    if (!pendingCells) { onGhostChange(null); return; }
+    const m = new Map();
+    pendingCells.filter(c=>c.isNew).forEach(c => m.set(cellKey(c.col,c.row), { letter: c.letter, isBlank: c.isBlank, player: activePlayer === 'opp' ? 'opp' : 'me' }));
+    onGhostChange(m);
+    return () => onGhostChange(null);
+  }, [pendingCells, activePlayer]);
+
+  const rackDeficit = useMemo(() => {
+    if (activePlayer !== 'me' || !pendingCells) return null;
+    const rackArr = parseRack(myRack);
+    const { counts: rackCounts, jokers } = rackToCounts(rackArr);
+    const required = {};
+    pendingCells.filter(c=>c.isNew && !c.isBlank).forEach(c => required[c.letter] = (required[c.letter]||0)+1);
+    const literalDeficit = multisetDeficit(required, rackCounts);
+    const blanksNeeded = pendingCells.filter(c=>c.isNew && c.isBlank).length;
+    const totalJokerNeed = literalDeficit + blanksNeeded;
+    return { ok: totalJokerNeed <= jokers, missingLiteral: literalDeficit, jokersNeeded: totalJokerNeed, jokersHave: jokers };
+  }, [activePlayer, pendingCells, myRack]);
+
+  const canSubmit = validation && validation.ok && pendingCells;
+
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex gap-2">
+        <button onClick={() => setActivePlayer('opp')}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activePlayer==='opp' ? 'bg-blue-500/20 text-blue-200 ring-1 ring-blue-400/50' : 'bg-ink-800 text-ink-400'}`}>Соперник</button>
+        <button onClick={() => setActivePlayer('me')}
+          className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${activePlayer==='me' ? 'bg-gold-500/20 text-gold-200 ring-1 ring-gold-400/50' : 'bg-ink-800 text-ink-400'}`}>Игрок (я)</button>
+      </div>
+
+      <div className="flex gap-2 items-center">
+        <div className="flex bg-ink-800 rounded-xl p-1">
+          <button onClick={() => setDir('H')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${dir==='H' ? 'bg-ink-600 text-gold-200' : 'text-ink-400'}`}><Icon path={ICONS.arrowRight} size={14}/>Гориз.</button>
+          <button onClick={() => setDir('V')} className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 ${dir==='V' ? 'bg-ink-600 text-gold-200' : 'text-ink-400'}`}><Icon path={ICONS.arrowDown} size={14}/>Вертик.</button>
+        </div>
+        <button onClick={() => setPickingStart(p=>!p)}
+          className={`ml-auto px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 ${pickingStart ? 'bg-gold-500/20 border-gold-400/60 text-gold-200 animate-pulseGlow' : 'bg-ink-800 border-ink-600 text-ink-300'}`}>
+          <Icon path={ICONS.target} size={14}/>
+          {startCell ? `${COL_LETTERS[startCell.col-1]}${startCell.row}` : 'выбрать клетку'}
+        </button>
+      </div>
+
+      <div>
+        <input type="text" inputMode="text" value={wordInput}
+          onChange={e => setWordInput(e.target.value.toUpperCase().replace(/Ё/g,'Е').replace(/[^А-Я]/g,''))}
+          placeholder="слово по клеткам, напр. ЗАСЛОН"
+          className="w-full bg-ink-800/70 border border-ink-600 rounded-xl px-3 py-2.5 text-sm tracking-[0.1em] focus:border-gold-400" />
+        {validation && !validation.ok && <div className="text-xs text-red-400 mt-1.5">{validation.error}</div>}
+        {validation && validation.ok && dictHit === false && (
+          <div className="text-xs text-amber-400/90 mt-1.5 flex items-center gap-1"><Icon path={ICONS.warn} size={12}/>Нет в словаре нарицательных сущ. в им.п. — возможно, другая словоформа. Проверьте вручную.</div>
+        )}
+      </div>
+
+      {pendingCells && scoreDetail && (
+        <div className="border-t border-ink-700 pt-3 space-y-3">
+          <PreviewStrip cells={pendingCells} editable onToggleBlank={(i) => setManualBlanks(m => ({...m, [i]: !(pendingCells[i].isBlank)}))} />
+          <ScoreBreakdown detail={scoreDetail} cornerAdj={cornerInfo.adj} cornerNotes={cornerInfo.notes} risk={risk} />
+          {activePlayer === 'me' && rackDeficit && !rackDeficit.ok && (
+            <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-2.5 py-2">
+              Не хватает фишек: нужно джокеров {rackDeficit.jokersNeeded}, в руке {rackDeficit.jokersHave}.
+            </div>
+          )}
+        </div>
+      )}
+
+      <Button variant="gold" size="lg" className="w-full" disabled={!canSubmit}
+        onClick={() => onCommit({ player: activePlayer, dir, startCell, word: wordInput, cells: pendingCells, scoreDetail, cornerInfo, risk, rackDeficit })}>
+        <Icon path={ICONS.check} size={18}/> Записать ход
+      </Button>
+    </Card>
+  );
+}
+
+/* ============================================================================
+   §16. МОДАЛКИ: нехватка фишек / обмен на джокеры
+   ========================================================================= */
+
+function InsufficientLettersModal({ open, onClose, info, onSwitchToOpponent, onForcePlace }) {
+  if (!info) return null;
+  return (
+    <Modal open={open} onClose={onClose} title="Не хватает фишек">
+      <div className="space-y-4">
+        <p className="text-sm text-ink-300">
+          На вашей подставке недостаточно букв (и джокеров) для этого слова.
+          Нужно джокеров/замен: <span className="text-gold-200 font-bold">{info.jokersNeeded}</span>,
+          в руке доступно: <span className="font-bold">{info.jokersHave}</span>.
+          Это также нарушает очерёдность хода — возможно, вы хотели записать ход соперника?
+        </p>
+        <div className="flex flex-col gap-2">
+          <Button variant="gold" onClick={onSwitchToOpponent}><Icon path={ICONS.swap} size={16}/> Исправить исполнителя на «Соперника»</Button>
+          <Button variant="danger" onClick={onForcePlace}><Icon path={ICONS.warn} size={16}/> Всё равно выставить фишки принудительно</Button>
+          <Button variant="ghost" onClick={onClose}>Отмена</Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function JokerExchangeModal({ open, onClose, candidate, myRack, jokerBurnCost, jokersAvailable, onConfirmBurn, onConfirmBuy }) {
+  const [selected, setSelected] = useState([]);
+  useEffect(() => { setSelected([]); }, [candidate]);
+  if (!candidate) return null;
+
+  const rackArr = parseRack(myRack);
+  const neededLetters = {};
+  candidate.mainCells.filter(c=>c.isNew).forEach(c => { neededLetters[c.letter] = (neededLetters[c.letter]||0)+1; });
+  const usedForWord = new Set();
+  const spareIdx = [];
+  const rackLeft = { ...rackToCounts(rackArr).counts };
+  rackArr.forEach((l, i) => {
+    if (l !== '*' && rackLeft[l] > 0 && neededLetters[l] > 0) { neededLetters[l]--; rackLeft[l]--; usedForWord.add(i); }
+  });
+  rackArr.forEach((l,i) => { if (!usedForWord.has(i) && l !== '*') spareIdx.push(i); });
+
+  const need = candidate.needsExtraJokers;
+  const requiredBurns = need * jokerBurnCost;
+  const canBurn = selected.length >= requiredBurns;
+
+  return (
+    <Modal open={open} onClose={onClose} title="Требуются джокеры" wide>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="font-display text-2xl text-gold-200">{candidate.word}</div>
+          <Badge tone="gold">{candidate.scoreDetail.total} очков</Badge>
+          <Badge tone="info">нужно джокеров: {need}</Badge>
+        </div>
+        <p className="text-sm text-ink-300">Выберите способ получить недостающие джокеры.</p>
+
+        <div className="rounded-xl border border-ink-700 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-200"><Icon path={ICONS.flame} size={16} className="text-amber-400"/> Сжечь свободные фишки ({jokerBurnCost} фишка(и) → 1 джокер)</div>
+          {spareIdx.length === 0 ? (
+            <div className="text-xs text-ink-500">Нет свободных фишек — все нужны для самого слова.</div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {spareIdx.map(i => (
+                <button key={i} onClick={() => setSelected(s => s.includes(i) ? s.filter(x=>x!==i) : [...s,i])}
+                  className={`w-9 h-9 rounded-lg font-display font-bold text-sm ${selected.includes(i) ? 'tile-face ring-2 ring-red-400' : 'tile-face'}`}>
+                  {rackArr[i]}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="text-xs text-ink-400">Выбрано {selected.length} из {requiredBurns} необходимых.</div>
+          <Button variant="danger" disabled={!canBurn} onClick={() => onConfirmBurn(selected.slice(0, requiredBurns))} className="w-full mt-1">
+            Сжечь и получить {need} джокер(а)
+          </Button>
+        </div>
+
+        <div className="rounded-xl border border-ink-700 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink-200"><Icon path={ICONS.gem} size={16} className="text-blue-300"/> Купить за деньги (в игре)</div>
+          <p className="text-xs text-ink-400">Джокер добавится в руку напрямую, не расходуя мешок.</p>
+          <Button variant="gold" onClick={() => onConfirmBuy(need)} className="w-full">Купить {need} джокер(а)</Button>
+        </div>
+
+        <Button variant="ghost" className="w-full" onClick={onClose}>Отмена</Button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ============================================================================
+   §17. ПАНЕЛЬ ПОДСКАЗОК
+   ========================================================================= */
+
+function CandidateCard({ c, onPreview, onApply, onNeedJoker, isJoker }) {
+  const tilesTxt = c.mainCells.filter(x=>x.isNew).map(x=>x.letter).join('');
+  return (
+    <div onMouseEnter={() => onPreview(c)} onMouseLeave={() => onPreview(null)} onClick={() => onPreview(c)}
+      className="rounded-2xl border border-ink-700 bg-ink-800/50 hover:bg-ink-800 hover:border-gold-500/40 transition-all p-3.5 cursor-pointer animate-rise">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="font-display font-bold text-lg text-ink-50 tracking-wide">{c.word}</div>
+          <div className="text-[11px] text-ink-500 mt-0.5">
+            {c.dir === 'H' ? 'по горизонтали' : 'по вертикали'} · старт {COL_LETTERS[c.startCell.col-1]}{c.startCell.row} · новых фишек: {tilesTxt.length} ({tilesTxt})
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="font-display text-2xl text-gold-200 leading-none">{c.scoreDetail.total}</div>
+          <div className="text-[10px] text-ink-500 uppercase tracking-wide">очков</div>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-1.5 mt-2.5">
+        {c.scoreDetail.bingo && <Badge tone="gold">+15 бинго 🎉</Badge>}
+        {c.cornerAdj > 0 && <Badge tone="ok">блок угла ✓</Badge>}
+        {c.cornerAdj < 0 && <Badge tone="danger">риск угла</Badge>}
+        {c.risk && c.risk.risky && <Badge tone="danger"><Icon path={ICONS.warn} size={11}/> достройка: {c.risk.options.slice(0,2).map(w=>w.toLowerCase()).join(', ')}{c.risk.options.length>2?'…':''}</Badge>}
+        {isJoker && <Badge tone="info"><Icon path={ICONS.gem} size={11}/> джокеров нужно: {c.needsExtraJokers}</Badge>}
+        <Badge>рейтинг {Math.round(c.sortScore)}</Badge>
+      </div>
+      <div className="flex gap-2 mt-3">
+        {isJoker ? (
+          <Button size="sm" variant="gold" className="flex-1" onClick={(e)=>{e.stopPropagation(); onNeedJoker(c);}}><Icon path={ICONS.gem} size={14}/> Получить джокеры</Button>
+        ) : (
+          <Button size="sm" variant="gold" className="flex-1" onClick={(e)=>{e.stopPropagation(); onApply(c);}}><Icon path={ICONS.arrowRight} size={14}/> Разместить</Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SuggestionsPanel({ board, layout, dict, hardStartLetters, myRack, onPreview, onApply, onNeedJoker }) {
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [wantJokerPass, setWantJokerPass] = useState(true);
+
+  const rackArr = useMemo(() => parseRack(myRack), [myRack]);
+
+  const run = useCallback(() => {
+    setLoading(true);
+    setTimeout(() => {
+      const res = generateCandidates(board, rackArr, dict, layout, hardStartLetters, { limit: 20, extraJokers: wantJokerPass ? 2 : 0 });
+      setResult(res);
+      setLoading(false);
+    }, 20);
+  }, [board, rackArr, dict, layout, hardStartLetters, wantJokerPass]);
+
+  useEffect(() => { setResult(null); }, [board, myRack, layout]);
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center gap-2 mb-3.5">
+        <Icon path={ICONS.sparkles} className="text-gold-300" size={18}/>
+        <h3 className="font-display text-sm text-ink-100">Тактические подсказки</h3>
+        <label className="ml-auto flex items-center gap-1.5 text-[11px] text-ink-400">
+          <input type="checkbox" checked={wantJokerPass} onChange={e=>setWantJokerPass(e.target.checked)} className="accent-gold-500"/>
+          показать варианты с докупкой джокеров
+        </label>
+      </div>
+      {rackArr.length === 0 ? (
+        <div className="text-sm text-ink-500 py-6 text-center">Сначала укажите свои фишки на вкладке «Ход».</div>
+      ) : (
+        <>
+          <Button variant="gold" className="w-full mb-4" onClick={run} disabled={loading}>
+            {loading ? 'Считаю…' : <><Icon path={ICONS.dice} size={16}/> Найти лучшие ходы</>}
+          </Button>
+          {result && (
+            <div className="space-y-4">
+              {result.timedOut && <div className="text-[11px] text-amber-400">⏱ Поиск прерван по таймауту — показаны найденные к этому моменту варианты.</div>}
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-ink-500 mb-2">Из своих фишек ({result.standard.length})</div>
+                {result.standard.length === 0 ? (
+                  <div className="text-sm text-ink-500 py-4 text-center">Подходящих слов не найдено. Попробуйте обмен фишек.</div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[60vh] overflow-y-auto pr-1 scrollbar-none">
+                    {result.standard.map((c,i) => <CandidateCard key={i} c={c} onPreview={onPreview} onApply={onApply} onNeedJoker={onNeedJoker} />)}
+                  </div>
+                )}
+              </div>
+              {wantJokerPass && result.jokerNeeded.length > 0 && (
+                <div>
+                  <div className="text-[11px] uppercase tracking-wide text-ink-500 mb-2 flex items-center gap-1"><Icon path={ICONS.gem} size={12}/> Выгоднее с докупкой джокеров ({result.jokerNeeded.length})</div>
+                  <div className="space-y-2.5">
+                    {result.jokerNeeded.map((c,i) => <CandidateCard key={i} c={c} isJoker onPreview={onPreview} onApply={onApply} onNeedJoker={onNeedJoker} />)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/* ============================================================================
+   §18. ПАНЕЛЬ МЕШКА
+   ========================================================================= */
+
+function BagPanel({ bagState, oppHandCount, setOppHandCount }) {
+  const sorted = RUSSIAN_ALPHABET.slice().sort();
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <Icon path={ICONS.bag} className="text-gold-300" size={18}/>
+        <h3 className="font-display text-sm text-ink-100">Учёт мешка</h3>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-ink-800/60 p-3 text-center">
+          <div className="font-display text-2xl text-gold-200">{bagState.bagOnlyTotal}</div>
+          <div className="text-[11px] text-ink-500 mt-0.5">осталось в мешке (оценка)</div>
+        </div>
+        <div className="rounded-xl bg-ink-800/60 p-3 text-center">
+          <div className="font-display text-2xl text-blue-200">{bagState.unknownPoolTotal}</div>
+          <div className="text-[11px] text-ink-500 mt-0.5">неизвестно (мешок + рука соперника)</div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-ink-400">
+        <span>Фишек у соперника на руках:</span>
+        <input type="number" min="0" max="7" value={oppHandCount}
+          onChange={e => setOppHandCount(Math.max(0, Math.min(7, parseInt(e.target.value||'0',10))))}
+          className="w-14 bg-ink-800 border border-ink-600 rounded-lg px-2 py-1 text-center text-ink-100" />
+        <span className="text-ink-600">(корректируется автоматически по ходам, можно поправить вручную)</span>
+      </div>
+
+      <div>
+        <div className="text-[11px] uppercase tracking-wide text-ink-500 mb-2">Неизвестный пул по буквам</div>
+        <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+          {sorted.map(L => {
+            const left = bagState.perLetterUnknownPool[L];
+            const low = left <= 1;
+            return (
+              <div key={L} className={`rounded-lg p-1.5 text-center border ${low ? 'border-red-500/40 bg-red-500/10' : 'border-ink-700 bg-ink-800/50'}`}>
+                <div className="font-display font-bold text-sm text-ink-100">{L}</div>
+                <div className={`text-[10px] ${low ? 'text-red-300' : 'text-ink-400'}`}>{left}</div>
+                <div className="text-[8px] text-ink-600">{LETTER_VALUES[L]}о</div>
+              </div>
+            );
+          })}
+          <div className="rounded-lg p-1.5 text-center border border-gold-500/40 bg-gold-500/10">
+            <div className="font-display font-bold text-sm text-gold-200">★</div>
+            <div className="text-[10px] text-gold-300">{bagState.jokersUnknownPool}</div>
+            <div className="text-[8px] text-ink-600">0о</div>
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-ink-500 leading-relaxed">
+        «Неизвестный пул» — буквы, чья точная позиция не известна (либо ещё в мешке, либо уже на руках у соперника).
+        Точный остаток именно в мешке — оценка на основе введённого количества фишек в руке соперника.
+      </p>
+    </Card>
+  );
+}
+
+/* ============================================================================
+   §19. ИСТОРИЯ ХОДОВ
+   ========================================================================= */
+
+function HistoryPanel({ history, onUndo, myTotal, oppTotal }) {
+  return (
+    <Card className="p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <Icon path={ICONS.history} className="text-gold-300" size={18}/>
+        <h3 className="font-display text-sm text-ink-100">История ходов</h3>
+        <Button size="sm" variant="danger" className="ml-auto" disabled={history.length===0} onClick={onUndo}>
+          <Icon path={ICONS.undo} size={14}/> Отменить последний
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl bg-gold-500/10 border border-gold-500/30 p-3 text-center">
+          <div className="font-display text-2xl text-gold-200">{myTotal}</div>
+          <div className="text-[11px] text-ink-400">мой счёт</div>
+        </div>
+        <div className="rounded-xl bg-blue-500/10 border border-blue-500/30 p-3 text-center">
+          <div className="font-display text-2xl text-blue-200">{oppTotal}</div>
+          <div className="text-[11px] text-ink-400">счёт соперника</div>
+        </div>
+      </div>
+      {history.length === 0 ? (
+        <div className="text-sm text-ink-500 py-6 text-center">Ходов пока нет.</div>
+      ) : (
+        <div className="space-y-1.5 max-h-[50vh] overflow-y-auto pr-1 scrollbar-none">
+          {history.slice().reverse().map((m) => (
+            <div key={m.index} className="flex items-center gap-2 rounded-xl bg-ink-800/50 px-3 py-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: moveColor(m.index) }}></span>
+              <Badge tone={m.player==='me' ? 'gold':'info'}>{m.player==='me' ? 'Я' : 'Соперник'}</Badge>
+              <span className="font-display font-semibold text-sm">{m.word}</span>
+              {m.scoreDetail.bingo && <span title="бинго">🎉</span>}
+              <span className="ml-auto font-display text-gold-200 font-bold">{m.scoreDetail.total}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+/* ============================================================================
+   §20. ВСПОМОГАТЕЛЬНОЕ: работа с рукой при обмене на джокеры
+   ========================================================================= */
+
+function removeFromRackArr(arr, lettersToRemove) {
+  const copy = arr.slice();
+  lettersToRemove.forEach(l => {
+    const idx = copy.indexOf(l);
+    if (idx !== -1) copy.splice(idx, 1);
+  });
+  return copy;
+}
+
+function generateIconDataURL() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" rx="100" fill="#141019"/><rect x="22" y="22" width="468" height="468" rx="84" fill="none" stroke="#e0a72a" stroke-width="12"/><text x="256" y="345" font-family="Georgia, 'Times New Roman', serif" font-size="290" font-weight="700" text-anchor="middle" fill="#e0a72a">Э</text></svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+/* ============================================================================
+   §21. КОРЕНЬ ПРИЛОЖЕНИЯ
+   ========================================================================= */
+
+const TABS = [
+  { id: 'move', label: 'Ход', icon: 'target' },
+  { id: 'suggest', label: 'Подсказки', icon: 'sparkles' },
+  { id: 'bag', label: 'Мешок', icon: 'bag' },
+  { id: 'history', label: 'История', icon: 'history' },
+  { id: 'settings', label: 'Настройки', icon: 'settings' },
+];
+
+function App() {
+  const [layoutKey, setLayoutKey] = useState('classic');
+  const layout = BOARD_LAYOUTS[layoutKey];
+
+  const [dict, setDict] = useState(null);
+  const [dictStatus, setDictStatus] = useState('loading');
+  const [dictError, setDictError] = useState('');
+
+  const [board, setBoard] = useState(emptyBoard());
+  const [history, setHistory] = useState([]);
+  const [oppHandCount, setOppHandCount] = useState(7);
+  const [myRack, setMyRack] = useState('');
+
+  const [activePlayer, setActivePlayer] = useState('opp');
+  const [dir, setDir] = useState('H');
+  const [startCell, setStartCell] = useState(null);
+  const [pickingStart, setPickingStart] = useState(false);
+  const [wordInput, setWordInput] = useState('');
+
+  const [activeTab, setActiveTab] = useState('move');
+  const [ghostMap, setGhostMap] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const [insufficientOpen, setInsufficientOpen] = useState(false);
+  const [insufficientInfo, setInsufficientInfo] = useState(null);
+  const [jokerModalCandidate, setJokerModalCandidate] = useState(null);
+  const [jokerBurnCost, setJokerBurnCost] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadDictionary().then(d => { if (!cancelled) { setDict(d); setDictStatus('ready'); } })
+      .catch(err => { if (!cancelled) { setDictError(err.message); setDictStatus('error'); } });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    const icon = generateIconDataURL();
+    document.getElementById('apple-touch-icon').setAttribute('href', icon);
+    document.getElementById('favicon-icon').setAttribute('href', icon);
+    const manifest = {
+      name: 'Эрудит Помощник Pro', short_name: 'Эрудит', start_url: './', scope: './',
+      display: 'standalone', background_color: '#0a0908', theme_color: '#0a0908',
+      icons: [{ src: icon, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' }],
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/json' }));
+    const link = document.createElement('link'); link.rel = 'manifest'; link.href = url;
+    document.head.appendChild(link);
+    if ('serviceWorker' in navigator) {
+      try {
+        const swCode = "const CACHE='erudit-pomoshnik-v1';self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(res=>{const c=res.clone();caches.open(CACHE).then(cc=>cc.put(e.request,c));return res;}).catch(()=>caches.match(e.request)));});";
+        const swUrl = URL.createObjectURL(new Blob([swCode], { type: 'application/javascript' }));
+        navigator.serviceWorker.register(swUrl).catch(() => {});
+      } catch (e) {}
+    }
+  }, []);
+
+  const hardStartLetters = useMemo(() => computeHardStartLetters(dict), [dict]);
+  const burnedFlat = useMemo(() => history.flatMap(m => m.burned || []), [history]);
+  const bagState = useMemo(() => computeBagState(board, parseRack(myRack), burnedFlat, oppHandCount), [board, myRack, burnedFlat, oppHandCount]);
+  const myTotal = useMemo(() => history.filter(m=>m.player==='me').reduce((a,m)=>a+m.scoreDetail.total,0), [history]);
+  const oppTotal = useMemo(() => history.filter(m=>m.player==='opp').reduce((a,m)=>a+m.scoreDetail.total,0), [history]);
+
+  const notify = useCallback((msg) => { setToast(msg); setTimeout(() => setToast(t => t===msg ? null : t), 3200); }, []);
+
+  const finalizeMove = useCallback((rec) => {
+    const idx = history.length;
+    setBoard(b => {
+      const nb = { ...b };
+      rec.cells.filter(c => c.isNew).forEach(c => { nb[cellKey(c.col,c.row)] = { letter: c.letter, isBlank: c.isBlank, moveIndex: idx, player: rec.player }; });
+      return nb;
+    });
+    const tilesPlaced = rec.cells.filter(c => c.isNew).length;
+    const prevOppHandCount = oppHandCount;
+    if (rec.player === 'opp') {
+      const drawn = Math.min(tilesPlaced, bagState.bagOnlyTotal);
+      setOppHandCount(Math.max(0, oppHandCount - tilesPlaced + drawn));
+    }
+    setHistory(h => [...h, {
+      index: idx, player: rec.player, word: rec.word, dir: rec.dir, startCell: rec.startCell,
+      mainCells: rec.cells, scoreDetail: rec.scoreDetail, burned: rec.burned || [], prevOppHandCount,
+    }]);
+    setWordInput(''); setStartCell(null); setGhostMap(null);
+    setActivePlayer(p => p === 'me' ? 'opp' : 'me');
+    notify(`Ход записан: ${rec.word} (+${rec.scoreDetail.total})`);
+  }, [history.length, oppHandCount, bagState.bagOnlyTotal, notify]);
+
+  const handleCommitFromForm = useCallback((payload) => {
+    if (payload.player === 'me' && payload.rackDeficit && !payload.rackDeficit.ok) {
+      setInsufficientInfo(payload); setInsufficientOpen(true); return;
+    }
+    finalizeMove(payload);
+  }, [finalizeMove]);
+
+  const handleUndo = useCallback(() => {
+    setHistory(h => {
+      if (h.length === 0) return h;
+      const last = h[h.length - 1];
+      setBoard(b => { const nb = { ...b }; last.mainCells.filter(c=>c.isNew).forEach(c => delete nb[cellKey(c.col,c.row)]); return nb; });
+      setOppHandCount(last.prevOppHandCount);
+      return h.slice(0, -1);
+    });
+  }, []);
+
+  const handleApplySuggestion = useCallback((c) => {
+    setActivePlayer('me'); setDir(c.dir); setStartCell(c.startCell); setWordInput(c.word); setActiveTab('move');
+  }, []);
+
+  const handleNeedJoker = useCallback((c) => setJokerModalCandidate(c), []);
+
+  const handleConfirmBurn = useCallback((indices) => {
+    const c = jokerModalCandidate;
+    const rackArr = parseRack(myRack);
+    const burnedChars = indices.map(i => rackArr[i]);
+    const afterBurn = removeFromRackArr(rackArr, burnedChars);
+    const consumedReal = c.mainCells.filter(x => x.isNew && !x.isBlank).map(x => x.letter);
+    const finalRack = removeFromRackArr(afterBurn, consumedReal);
+    setMyRack(finalRack.join(''));
+    finalizeMove({ player: 'me', word: c.word, dir: c.dir, startCell: c.startCell, cells: c.mainCells, scoreDetail: c.scoreDetail, burned: burnedChars });
+    setJokerModalCandidate(null);
+  }, [jokerModalCandidate, myRack, finalizeMove]);
+
+  const handleConfirmBuy = useCallback(() => {
+    const c = jokerModalCandidate;
+    const rackArr = parseRack(myRack);
+    const consumedReal = c.mainCells.filter(x => x.isNew && !x.isBlank).map(x => x.letter);
+    const finalRack = removeFromRackArr(rackArr, consumedReal);
+    setMyRack(finalRack.join(''));
+    finalizeMove({ player: 'me', word: c.word, dir: c.dir, startCell: c.startCell, cells: c.mainCells, scoreDetail: c.scoreDetail, burned: [] });
+    setJokerModalCandidate(null);
+  }, [jokerModalCandidate, myRack, finalizeMove]);
+
+  const onCellClick = useCallback((c, r) => {
+    if (pickingStart) { setStartCell({ col: c, row: r }); setPickingStart(false); }
+  }, [pickingStart]);
+
+  if (dictStatus === 'error') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <Card className="p-6 max-w-md text-center space-y-3">
+          <Icon path={ICONS.warn} size={32} className="mx-auto text-red-400"/>
+          <h2 className="font-display text-lg text-red-300">Словарь не загружен</h2>
+          <p className="text-sm text-ink-400">{dictError}</p>
+          <p className="text-xs text-ink-500">Убедитесь, что файл <code className="text-gold-300">russian_words_nouns.txt</code> лежит рядом с index.html, а приложение открыто через http(s) (GitHub Pages или локальный сервер), а не напрямую из файловой системы.</p>
+        </Card>
+      </div>
+    );
+  }
+  if (dictStatus === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center space-y-3">
+          <div className="font-display text-2xl shimmer-text">Эрудит Помощник Pro</div>
+          <div className="text-sm text-ink-500">Загружаю словарь…</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen pb-28 sm:pb-8">
+      <header className="sticky top-0 z-30 glass px-4 py-3 flex items-center gap-3">
+        <div>
+          <div className="font-display font-bold text-sm sm:text-base shimmer-text leading-tight">Эрудит Помощник Pro</div>
+          <div className="text-[10px] text-ink-500">{dict.size.toLocaleString('ru-RU')} слов в словаре · {layout.name}</div>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge tone={activePlayer==='me' ? 'gold' : 'info'} className="hidden sm:inline-flex">ход: {activePlayer==='me'?'мой':'соперника'}</Badge>
+          <button onClick={() => setLayoutKey(k => k==='classic' ? 'alt' : 'classic')}
+            className="p-2 rounded-xl bg-ink-800 border border-ink-600 text-ink-300 hover:text-gold-200" title="Переключить раскладку доски">
+            <Icon path={ICONS.layers} size={18}/>
+          </button>
+        </div>
+      </header>
+
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-40 bg-ink-800 border border-gold-500/40 text-gold-100 text-sm px-4 py-2 rounded-xl shadow-glow animate-rise">
+          {toast}
+        </div>
+      )}
+
+      <main className="max-w-6xl mx-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4">
+        <div className="space-y-3">
+          {pickingStart && (
+            <div className="text-xs text-gold-200 bg-gold-500/10 border border-gold-500/30 rounded-xl px-3 py-2 text-center animate-pulseGlow">
+              Нажмите на клетку доски, откуда начнётся слово
+            </div>
+          )}
+          <Board board={board} layout={layout} ghostMap={ghostMap} startCell={startCell} onCellClick={onCellClick} />
+          <div className="hidden lg:block">
+            <RackEditor value={myRack} onChange={setMyRack} bagState={bagState} />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="lg:hidden">
+            <Card className="p-4"><RackEditor value={myRack} onChange={setMyRack} bagState={bagState} /></Card>
+          </div>
+
+          <div className="flex gap-1.5 bg-ink-900/60 border border-ink-700 rounded-2xl p-1.5 overflow-x-auto scrollbar-none">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setActiveTab(t.id)}
+                className={`flex-1 min-w-[64px] flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-semibold transition-all ${activeTab===t.id ? 'bg-gold-500/15 text-gold-200 ring-1 ring-gold-500/40' : 'text-ink-400 hover:text-ink-200'}`}>
+                <Icon path={ICONS[t.icon]} size={17}/>{t.label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'move' && (
+            <MoveEntryPanel board={board} layout={layout} dict={dict} hardStartLetters={hardStartLetters}
+              myRack={myRack} activePlayer={activePlayer} setActivePlayer={setActivePlayer}
+              dir={dir} setDir={setDir} startCell={startCell} setStartCell={setStartCell}
+              pickingStart={pickingStart} setPickingStart={setPickingStart}
+              wordInput={wordInput} setWordInput={setWordInput}
+              onGhostChange={setGhostMap} onCommit={handleCommitFromForm} notify={notify} />
+          )}
+          {activeTab === 'suggest' && (
+            <SuggestionsPanel board={board} layout={layout} dict={dict} hardStartLetters={hardStartLetters}
+              myRack={myRack} onPreview={(c) => setGhostMap(c ? new Map(c.mainCells.filter(x=>x.isNew).map(x=>[cellKey(x.col,x.row),{letter:x.letter,isBlank:x.isBlank,player:'me'}])) : null)}
+              onApply={handleApplySuggestion} onNeedJoker={handleNeedJoker} />
+          )}
+          {activeTab === 'bag' && <BagPanel bagState={bagState} oppHandCount={oppHandCount} setOppHandCount={setOppHandCount} />}
+          {activeTab === 'history' && <HistoryPanel history={history} onUndo={handleUndo} myTotal={myTotal} oppTotal={oppTotal} />}
+          {activeTab === 'settings' && (
+            <Card className="p-4 space-y-4">
+              <div className="flex items-center gap-2"><Icon path={ICONS.settings} className="text-gold-300" size={18}/><h3 className="font-display text-sm">Настройки</h3></div>
+              <div>
+                <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Раскладка доски</label>
+                <div className="flex gap-2 mt-2">
+                  <Button variant={layoutKey==='classic'?'gold':'default'} onClick={() => setLayoutKey('classic')} className="flex-1">Основная</Button>
+                  <Button variant={layoutKey==='alt'?'gold':'default'} onClick={() => setLayoutKey('alt')} className="flex-1">Альтернативная</Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wide text-ink-400 font-semibold">Стоимость джокера при обмене (фишек за 1 джокер)</label>
+                <input type="number" min="1" max="5" value={jokerBurnCost} onChange={e=>setJokerBurnCost(Math.max(1,parseInt(e.target.value||'1',10)))}
+                  className="mt-2 w-24 bg-ink-800 border border-ink-600 rounded-xl px-3 py-2 text-center" />
+                <p className="text-[11px] text-ink-500 mt-1.5">Точный курс обмена не задокументирован в правилах — при необходимости скорректируйте здесь.</p>
+              </div>
+              <div className="text-[11px] text-ink-500 leading-relaxed border-t border-ink-700 pt-3">
+                Полный мешок (по таблице букв): <span className="text-ink-300 font-semibold">{TOTAL_BAG_INITIAL}</span> фишек
+                ({Object.values(BAG_INITIAL).reduce((a,b)=>a+b,0)} букв + {JOKER_COUNT_INITIAL} джокера).
+              </div>
+            </Card>
+          )}
+        </div>
+      </main>
+
+      <InsufficientLettersModal open={insufficientOpen} info={insufficientInfo && insufficientInfo.rackDeficit}
+        onClose={() => setInsufficientOpen(false)}
+        onSwitchToOpponent={() => { finalizeMove({ ...insufficientInfo, player: 'opp' }); setInsufficientOpen(false); }}
+        onForcePlace={() => { finalizeMove(insufficientInfo); setInsufficientOpen(false); }} />
+
+      <JokerExchangeModal open={!!jokerModalCandidate} onClose={() => setJokerModalCandidate(null)}
+        candidate={jokerModalCandidate} myRack={myRack} jokerBurnCost={jokerBurnCost}
+        onConfirmBurn={handleConfirmBurn} onConfirmBuy={handleConfirmBuy} />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+
+</body>
+</html>

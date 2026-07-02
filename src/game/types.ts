@@ -55,6 +55,7 @@ export interface MoveRecord {
   cells: PlacedLetter[];
   score: ScoreBreakdown;
   multiplierStats: MoveMultiplierStats;
-  exchangedTiles: string[];
+  /** Rack text before this move, so undo can restore it without trying to reverse tile consumption. */
+  rackBeforeMove: string;
   prevOpponentHandCount: number;
 }

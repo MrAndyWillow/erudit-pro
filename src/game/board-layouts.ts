@@ -105,3 +105,12 @@ export const BOARD_LAYOUTS = {
 } as const;
 
 export type LayoutKey = keyof typeof BOARD_LAYOUTS;
+
+/** Letter-multiplier factor at a cell (3/2/1) — used to prefer spending real
+ * tiles on high-value cells and saving jokers (worth 0) for plain ones. */
+export function letterMultiplierAt(layout: BoardLayout, pos: Pos): number {
+  const premium = layout.premiumAt.get(posKeyStatic(pos));
+  if (premium === 'L3') return 3;
+  if (premium === 'L2') return 2;
+  return 1;
+}

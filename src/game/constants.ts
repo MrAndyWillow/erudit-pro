@@ -28,5 +28,13 @@ export const BAG_INITIAL: Record<string, number> = {
 
 export const ALPHABET = Object.keys(LETTER_VALUES);
 
+// True Russian alphabetical order (е/ё merged) — for keyboard layouts and any
+// other UI that lists letters; ALPHABET above follows LETTER_VALUES' point-value
+// grouping instead, which reads oddly as a keyboard.
+export const ALPHABET_ORDERED = [
+  'А', 'Б', 'В', 'Г', 'Д', 'Е', 'Ж', 'З', 'И', 'Й', 'К', 'Л', 'М', 'Н', 'О', 'П',
+  'Р', 'С', 'Т', 'У', 'Ф', 'Х', 'Ц', 'Ч', 'Ш', 'Щ', 'Ъ', 'Ы', 'Ь', 'Э', 'Ю', 'Я',
+];
+
 export const TOTAL_TILES_INITIAL =
   Object.values(BAG_INITIAL).reduce((sum, count) => sum + count, 0) + JOKER_COUNT_INITIAL;
